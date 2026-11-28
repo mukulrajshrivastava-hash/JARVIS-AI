@@ -6,12 +6,8 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
@@ -22,48 +18,62 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
-      - name: Setup Gradle
+      - name: Install Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.9"
 
-      - name: Find and Extract ZIP
+      - name: Extract Android Project
         run: |
+          set -e
+
           ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" -print -quit)
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: Repository root mein koi ZIP file nahi mili."
-            ls -la
+            echo "ERROR: ZIP file nahi mili"
             exit 1
           fi
 
-          echo "Found ZIP: $ZIP_FILE"
           mkdir -p source
           unzip -o "$ZIP_FILE" -d source
 
-      - name: Fix AlarmClock Import
-        run: |
-          FILE="source/app/src/main/java/com/example/jarvisai/MainActivity.kt"
+          echo "ZIP extracted successfully"
 
-          if [ ! -f "$FILE" ]; then
-            echo "ERROR: MainActivity.kt nahi mili."
+      - name: Find and Prepare Android Project
+        run: |
+          set -e
+
+          FILE=$(find source -type f -path "*/app/src/main/java/com/example/jarvisai/MainActivity.kt" -print -quit)
+
+          if [ -z "$FILE" ]; then
+            echo "ERROR: MainActivity.kt nahi mili"
             find source -name MainActivity.kt
             exit 1
           fi
 
-          sed -i 's/^import android\.app\.AlarmClock$/import android.provider.AlarmClock/' "$FILE"
+          PROJECT_DIR="${FILE%/app/src/main/java/com/example/jarvisai/MainActivity.kt}"
 
-          echo "AlarmClock import:"
-          grep -n "AlarmClock" "$FILE" | head -10
+          echo "Project found: $PROJECT_DIR"
 
-      - name: Build Debug APK
-        run: gradle -p source assembleDebug
+          cp -a "$PROJECT_DIR"/. source/
+
+          FILE="source/app/src/main/java/com/example/jarvisai/MainActivity.kt"
+
+          if [ ! -f "$FILE" ]; then
+            echo "ERROR: MainActivity copy nahi hui"
+            exit 1
+          fi
+
+          sed -i 's/import android.app.AlarmClock/import android.provider.AlarmClock/' "$FILE"
+
+          echo "Android project ready"
+
+      - name: Build Android APK
+        run: |
+          gradle -p source assembleDebug
 
       - name: Upload JARVIS APK
         uses: actions/upload-artifact@v4
         with:
           name: JARVIS-APK
           path: source/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
