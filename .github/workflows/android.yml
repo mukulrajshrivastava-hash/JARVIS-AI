@@ -29,27 +29,37 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Extract JARVIS Project
+      - name: Find and Extract ZIP
         run: |
-          unzip -o JARVIS_AI_Secure_Starter.zip -d source
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" -print -quit)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: Repository root mein koi ZIP file nahi mili."
+            ls -la
+            exit 1
+          fi
+
+          echo "Found ZIP: $ZIP_FILE"
+          mkdir -p source
+          unzip -o "$ZIP_FILE" -d source
 
       - name: Fix AlarmClock Import
         run: |
           FILE="source/app/src/main/java/com/example/jarvisai/MainActivity.kt"
 
           if [ ! -f "$FILE" ]; then
-            echo "MainActivity.kt file not found!"
+            echo "ERROR: MainActivity.kt nahi mili."
+            find source -name MainActivity.kt
             exit 1
           fi
 
-          sed -i 's/import android.app.AlarmClock/import android.provider.AlarmClock/' "$FILE"
+          sed -i 's/^import android\.app\.AlarmClock$/import android.provider.AlarmClock/' "$FILE"
 
-          echo "Checking AlarmClock import:"
+          echo "AlarmClock import:"
           grep -n "AlarmClock" "$FILE" | head -10
 
       - name: Build Debug APK
-        run: |
-          gradle -p source assembleDebug
+        run: gradle -p source assembleDebug
 
       - name: Upload JARVIS APK
         uses: actions/upload-artifact@v4
